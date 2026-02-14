@@ -78,7 +78,26 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 				Expr: evalExpr,
 			}
 			setOps = append(setOps, setOp)
-		case sqlparser.NextTxScope, sqlparser.SessionScope:
+		case sqlparser.NextTxScope:
+			if expr.Var.Name.Lowered() == sqlparser.TransactionIsolationStr {
+				evalExpr, err := ec.convert(expr.Expr, false /*boolean*/, false /*identifierAsString*/)
+				if err != nil {
+					return nil, err
+				}
+				setOps = append(setOps, &engine.SetPendingTxIsolation{Expr: evalExpr, ExprStr: sqlparser.String(expr.Expr)})
+			} else {
+				planFunc, err := sysvarPlanningFuncs.Get(vschema.Environment(), expr)
+				if err != nil {
+					return nil, err
+				}
+				setOp, err := planFunc(expr, vschema, ec)
+				if err != nil {
+					return nil, err
+				}
+				setOps = append(setOps, setOp)
+				vschema.PlannerWarning("converted 'next transaction' scope to 'session' scope")
+			}
+		case sqlparser.SessionScope:
 			planFunc, err := sysvarPlanningFuncs.Get(vschema.Environment(), expr)
 			if err != nil {
 				return nil, err
@@ -88,12 +107,6 @@ func buildSetPlan(stmt *sqlparser.Set, vschema plancontext.VSchema) (*planResult
 				return nil, err
 			}
 			setOps = append(setOps, setOp)
-			if expr.Var.Scope == sqlparser.NextTxScope {
-				// This is to keep the backward compatibility.
-				// 'transaction_isolation' was added as a reserved connection system variable, so it used to change the setting at session level already.
-				// logging warning now to
-				vschema.PlannerWarning("converted 'next transaction' scope to 'session' scope")
-			}
 		case sqlparser.VitessMetadataScope:
 			value, err := getValueFor(expr)
 			if err != nil {

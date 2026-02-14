@@ -1074,6 +1074,10 @@ func (vc *VCursorImpl) SetSysVar(name string, expr string) {
 	vc.SafeSession.SetSystemVariable(name, expr)
 }
 
+func (vc *VCursorImpl) SetPendingTxIsolation(level string) {
+	vc.SafeSession.SetPendingTxIsolation(level)
+}
+
 func (vc *VCursorImpl) CheckForReservedConnection(setVarComment string, stmt sqlparser.Statement) {
 	if setVarComment == "" {
 		return

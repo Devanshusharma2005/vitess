@@ -294,6 +294,8 @@ func (t *noopVCursor) SetSysVar(name string, expr string) {
 	// panic("implement me")
 }
 
+func (t *noopVCursor) SetPendingTxIsolation(level string) {}
+
 func (t *noopVCursor) InReservedConn() bool {
 	panic("implement me")
 }
@@ -551,6 +553,10 @@ func (f *loggingVCursor) SetUDV(key string, value any) error {
 
 func (f *loggingVCursor) SetSysVar(name string, expr string) {
 	f.log = append(f.log, fmt.Sprintf("SysVar set with (%s,%v)", name, expr))
+}
+
+func (f *loggingVCursor) SetPendingTxIsolation(level string) {
+	f.log = append(f.log, fmt.Sprintf("SetPendingTxIsolation(%s)", level))
 }
 
 func (f *loggingVCursor) NeedsReservedConn() {

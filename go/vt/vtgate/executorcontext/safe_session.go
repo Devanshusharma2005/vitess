@@ -70,6 +70,9 @@ type (
 		// Note: This is stored in the Go wrapper, not in the protobuf Session.
 		targetTabletAlias *topodatapb.TabletAlias
 
+		PendingTxIsolation string
+		ActiveTxIsolation  string
+
 		*vtgatepb.Session
 	}
 
@@ -204,6 +207,7 @@ func (session *SafeSession) resetCommonLocked() {
 	session.Session.InTransaction = false
 	session.commitOrder = vtgatepb.CommitOrder_NORMAL
 	session.Savepoints = nil
+	session.ActiveTxIsolation = ""
 	if session.Options != nil {
 		session.Options.TransactionAccessMode = nil
 	}
@@ -933,6 +937,58 @@ func (session *SafeSession) GetOrCreateOptions() *querypb.ExecuteOptions {
 		session.Options = &querypb.ExecuteOptions{}
 	}
 	return session.Options
+}
+
+// SetPendingTxIsolation sets the isolation level for the next transaction only.
+// It does not update session.SystemVariables.
+func (session *SafeSession) SetPendingTxIsolation(level string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.PendingTxIsolation = level
+}
+
+// GetPendingTxIsolation returns the pending next-transaction isolation level, if any.
+func (session *SafeSession) GetPendingTxIsolation() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.PendingTxIsolation
+}
+
+// GetActiveTxIsolation returns the active transaction isolation level, if any.
+func (session *SafeSession) GetActiveTxIsolation() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.ActiveTxIsolation
+}
+
+func isolationLevelToEnum(level string) querypb.ExecuteOptions_TransactionIsolation {
+	switch strings.ReplaceAll(strings.ToUpper(level), "-", "_") {
+	case "REPEATABLE_READ":
+		return querypb.ExecuteOptions_REPEATABLE_READ
+	case "READ_COMMITTED":
+		return querypb.ExecuteOptions_READ_COMMITTED
+	case "READ_UNCOMMITTED":
+		return querypb.ExecuteOptions_READ_UNCOMMITTED
+	case "SERIALIZABLE":
+		return querypb.ExecuteOptions_SERIALIZABLE
+	default:
+		return querypb.ExecuteOptions_DEFAULT
+	}
+}
+
+// GetOptionsForBegin returns ExecuteOptions to use when starting a transaction.
+// If PendingTxIsolation is set, it is applied to the returned options, promoted to ActiveTxIsolation, and PendingTxIsolation is cleared.
+func (session *SafeSession) GetOptionsForBegin() *querypb.ExecuteOptions {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	if session.PendingTxIsolation == "" {
+		return session.Options
+	}
+	opts := proto.Clone(session.GetOrCreateOptions()).(*querypb.ExecuteOptions)
+	opts.TransactionIsolation = isolationLevelToEnum(session.PendingTxIsolation)
+	session.ActiveTxIsolation = session.PendingTxIsolation
+	session.PendingTxIsolation = ""
+	return opts
 }
 
 func (session *SafeSession) CachePlan() bool {

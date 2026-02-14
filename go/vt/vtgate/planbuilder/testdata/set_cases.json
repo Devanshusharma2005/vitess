@@ -580,21 +580,15 @@
     "comment": "set transaction isolation level",
     "query": "set transaction isolation level read committed",
     "plan": {
-      "Type": "MultiShard",
+      "Type": "Local",
       "QueryType": "SET",
       "Original": "set transaction isolation level read committed",
       "Instructions": {
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarSet",
-            "Name": "transaction_isolation",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "Expr": "'READ-COMMITTED'",
-            "SupportSetVar": false
+            "Type": "SetPendingTxIsolation",
+            "Expr": "'read-committed'"
           }
         ],
         "Inputs": [

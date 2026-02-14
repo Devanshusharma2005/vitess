@@ -230,6 +230,31 @@ func TestTransactionIsolationInTx(t *testing.T) {
 	utils.Exec(t, conn, "commit")
 }
 
+// TestSetTransactionIsolationNextTransactionOnly verifies that SET TRANSACTION ISOLATION LEVEL
+// applies only to the next transaction and that @@session.transaction_isolation reflects session-level state only.
+func TestSetTransactionIsolationNextTransactionOnly(t *testing.T) {
+	ctx := t.Context()
+
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "set @@session.transaction_isolation = 'REPEATABLE-READ'")
+	utils.AssertMatches(t, conn, "select @@session.transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
+
+	utils.Exec(t, conn, "set transaction isolation level read committed")
+	utils.AssertMatches(t, conn, "select @@session.transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
+
+	utils.Exec(t, conn, "begin")
+	utils.Exec(t, conn, "select 1")
+	utils.Exec(t, conn, "commit")
+
+	utils.AssertMatches(t, conn, "select @@session.transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
+	utils.Exec(t, conn, "begin")
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
+	utils.Exec(t, conn, "commit")
+}
+
 func start(t *testing.T) func() {
 	deleteAll := func() {
 		conn, err := mysql.Connect(context.Background(), &vtParams)

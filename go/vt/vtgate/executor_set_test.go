@@ -223,11 +223,8 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set session transaction isolation level serializable",
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
-		in: "set transaction isolation level serializable",
-		out: &vtgatepb.Session{
-			Autocommit: true,
-			Warnings:   []*querypb.QueryWarning{{Code: uint32(sqlerror.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}},
-		},
+		in:  "set transaction isolation level serializable",
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set transaction read only",
 		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: uint32(sqlerror.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}}},

@@ -188,7 +188,11 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			reservedID := info.reservedID
 
 			if session != nil && session.Session != nil {
-				opts = session.Options
+				if info.actionNeeded == begin || info.actionNeeded == reserveBegin {
+					opts = session.GetOptionsForBegin()
+				} else {
+					opts = session.Options
+				}
 			}
 
 			if opts == nil && fetchLastInsertID {
@@ -419,7 +423,11 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			reservedID := info.reservedID
 
 			if session != nil && session.Session != nil {
-				opts = session.Options
+				if info.actionNeeded == begin || info.actionNeeded == reserveBegin {
+					opts = session.GetOptionsForBegin()
+				} else {
+					opts = session.Options
+				}
 			}
 
 			if opts == nil && fetchLastInsertID {

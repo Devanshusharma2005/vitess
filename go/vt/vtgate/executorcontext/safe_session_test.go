@@ -223,3 +223,40 @@ func TestTargetTabletAlias(t *testing.T) {
 	session.SetTargetTabletAlias(nil)
 	assert.Nil(t, session.GetTargetTabletAlias())
 }
+
+func TestSetPendingTxIsolation(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{})
+	session.SetPendingTxIsolation("READ-COMMITTED")
+	assert.Equal(t, "READ-COMMITTED", session.GetPendingTxIsolation())
+	assert.Empty(t, session.GetActiveTxIsolation())
+	if session.SystemVariables != nil {
+		assert.NotContains(t, session.SystemVariables, "transaction_isolation")
+	}
+}
+
+func TestGetOptionsForBegin(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{})
+	session.Options = &querypb.ExecuteOptions{}
+
+	session.SetPendingTxIsolation("READ-COMMITTED")
+	opts := session.GetOptionsForBegin()
+	require.NotNil(t, opts)
+	assert.Equal(t, querypb.ExecuteOptions_READ_COMMITTED, opts.TransactionIsolation)
+	assert.Empty(t, session.GetPendingTxIsolation())
+	assert.Equal(t, "READ-COMMITTED", session.GetActiveTxIsolation())
+
+	opts2 := session.GetOptionsForBegin()
+	assert.Equal(t, session.Options, opts2)
+	assert.Equal(t, querypb.ExecuteOptions_TransactionIsolation(0), opts2.TransactionIsolation)
+}
+
+func TestResetCommonLockedClearsActiveTxIsolation(t *testing.T) {
+	session := NewSafeSession(&vtgatepb.Session{})
+	session.Options = &querypb.ExecuteOptions{}
+	session.SetPendingTxIsolation("SERIALIZABLE")
+	_ = session.GetOptionsForBegin()
+	assert.Equal(t, "SERIALIZABLE", session.GetActiveTxIsolation())
+
+	session.ResetTx()
+	assert.Empty(t, session.GetActiveTxIsolation())
+}

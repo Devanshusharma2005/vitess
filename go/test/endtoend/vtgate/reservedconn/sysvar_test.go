@@ -511,6 +511,18 @@ func TestSysVarTxIsolation(t *testing.T) {
 		utils.Exec(t, conn, "set @@session.transaction_isolation = 'read-uncommitted'")
 		utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
 	})
+
+	t.Run("SET TRANSACTION does not change @@session.transaction_isolation", func(t *testing.T) {
+		conn, err := mysql.Connect(context.Background(), &vtParams)
+		require.NoError(t, err)
+		defer conn.Close()
+
+		utils.Exec(t, conn, "set @@session.transaction_isolation = 'REPEATABLE-READ'")
+		utils.AssertMatches(t, conn, "select @@session.transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
+
+		utils.Exec(t, conn, "set transaction isolation level read committed")
+		utils.AssertMatches(t, conn, "select @@session.transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
+	})
 }
 
 // TestSysVarInnodbWaitTimeout tests the innodb_lock_wait_timeout system variable

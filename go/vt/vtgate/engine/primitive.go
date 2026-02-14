@@ -164,6 +164,7 @@ type (
 		GetUDV(key string) *querypb.BindVariable
 
 		SetSysVar(name string, expr string)
+		SetPendingTxIsolation(level string)
 
 		// NeedsReservedConn marks this session as needing a dedicated connection to underlying database
 		NeedsReservedConn()

@@ -94,6 +94,13 @@ type (
 	VitessMetadata struct {
 		Name, Value string
 	}
+
+	// SetPendingTxIsolation implements the SetOp interface for SET TRANSACTION ISOLATION LEVEL.
+	// It stores the isolation level as pending for the next transaction only; it does not update session.SystemVariables.
+	SetPendingTxIsolation struct {
+		Expr    evalengine.Expr
+		ExprStr string `json:"Expr,omitempty"` // for plan JSON serialization
+	}
 )
 
 var unsupportedSQLModes = []string{"ANSI_QUOTES", "NO_BACKSLASH_ESCAPES", "PIPES_AS_CONCAT", "REAL_AS_FLOAT"}
@@ -588,4 +595,39 @@ func (v *VitessMetadata) Execute(ctx context.Context, vcursor VCursor, env *eval
 
 func (v *VitessMetadata) VariableName() string {
 	return v.Name
+}
+
+var _ SetOp = (*SetPendingTxIsolation)(nil)
+
+// MarshalJSON provides the type to SetOp for plan json
+func (s *SetPendingTxIsolation) MarshalJSON() ([]byte, error) {
+	exprStr := s.ExprStr
+	if exprStr == "" {
+		exprStr = fmt.Sprintf("%v", s.Expr)
+	}
+	return json.Marshal(struct {
+		Type string
+		Expr string
+	}{
+		Type: "SetPendingTxIsolation",
+		Expr: exprStr,
+	})
+}
+
+func (s *SetPendingTxIsolation) VariableName() string {
+	return "transaction_isolation"
+}
+
+func (s *SetPendingTxIsolation) Execute(ctx context.Context, vcursor VCursor, env *evalengine.ExpressionEnv) error {
+	value, err := env.Evaluate(s.Expr)
+	if err != nil {
+		return err
+	}
+	v := value.Value(vcursor.ConnCollation())
+	if !v.IsText() && !v.IsBinary() {
+		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongTypeForVar, "transaction_isolation requires a string value")
+	}
+	level := strings.ToUpper(strings.ReplaceAll(v.ToString(), " ", "-"))
+	vcursor.Session().SetPendingTxIsolation(level)
+	return nil
 }
