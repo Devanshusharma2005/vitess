@@ -156,26 +156,35 @@ func TestSystemSchemaQueryWithoutQualifier(t *testing.T) {
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s' "+
 		"order by t.table_schema,t.table_name,c.column_name", shardedKs, shardedKs)
-	qr1 := utils.Exec(t, conn, queryWithQualifier)
 
-	utils.Exec(t, conn, "use information_schema")
 	queryWithoutQualifier := fmt.Sprintf("select t.table_schema,t.table_name,c.column_name,c.column_type "+
 		"from tables t "+
 		"join columns c "+
 		"on c.table_schema = t.table_schema and c.table_name = t.table_name "+
 		"where t.table_schema = '%s' and c.table_schema = '%s' "+
 		"order by t.table_schema,t.table_name,c.column_name", shardedKs, shardedKs)
-	qr2 := utils.Exec(t, conn, queryWithoutQualifier)
-	require.Equal(t, qr1, qr2)
 
-	connParams := vtParams
-	connParams.DbName = "information_schema"
-	conn2, err := mysql.Connect(ctx, &connParams)
-	require.NoError(t, err)
-	defer conn2.Close()
+	for _, workload := range []string{"oltp", "olap"} {
+		t.Run(workload, func(t *testing.T) {
+			utils.Exec(t, conn, "set workload = "+workload)
 
-	qr3 := utils.Exec(t, conn2, queryWithoutQualifier)
-	require.Equal(t, qr2, qr3)
+			qr1 := utils.Exec(t, conn, queryWithQualifier)
+
+			utils.Exec(t, conn, "use information_schema")
+			qr2 := utils.Exec(t, conn, queryWithoutQualifier)
+			require.Equal(t, qr1, qr2)
+
+			connParams := vtParams
+			connParams.DbName = "information_schema"
+			conn2, err := mysql.Connect(ctx, &connParams)
+			require.NoError(t, err)
+			defer conn2.Close()
+
+			utils.Exec(t, conn2, "set workload = "+workload)
+			qr3 := utils.Exec(t, conn2, queryWithoutQualifier)
+			require.Equal(t, qr2, qr3)
+		})
+	}
 }
 
 func TestMultipleSchemaPredicates(t *testing.T) {
